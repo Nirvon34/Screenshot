@@ -1,51 +1,35 @@
-const { chromium } = require('playwright');
+import express from "express";
+import puppeteer from "puppeteer";
 
-// берем аргумент из командной строки
-const input = process.argv[2];
+const app = express();
+app.use(express.json({ limit: "10mb" }));
 
-if (!input) {
-    console.log("Укажи regNumber или ссылку:");
-    console.log("node screenshot.js 32616013925");
-    console.log("или");
-    console.log("node screenshot.js 'https://...' ");
-    process.exit(1);
-}
+app.post("/screenshot", async (req, res) => {
+    try {
+        const url = req.body.url;
 
-// если это число — строим ссылку
-let url;
-let fileName;
+        if (!url) {
+            return res.status(400).send("No URL");
+        }
 
-if (input.startsWith("http")) {
-    url = input;
+        const browser = await puppeteer.launch({
+            args: ["--no-sandbox", "--disable-setuid-sandbox"]
+        });
 
-// пытаемся вытащить regNumber из ссылки
-    const match = input.match(/regNumber=(\d+)/);
-    fileName = match ? match[1] : "tender";
-} else {
-    url = `https://zakupki.gov.ru/epz/order/notice/notice223/common-info.html?regNumber=${input}`;
-    fileName = input;
-}
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-(async () => {
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+        const buffer = await page.screenshot({ fullPage: true });
 
-    const page = await browser.newPage();
+        await browser.close();
 
-    await page.goto(url, { waitUntil: 'networkidle' });
+        res.set("Content-Type", "image/png");
+        res.send(buffer);
 
-    await page.waitForTimeout(5000);
+    } catch (e) {
+        res.status(500).send("Error: " + e.message);
+    }
+});
 
-    const path = `tender_${fileName}.png`;
-
-    await page.screenshot({
-        path,
-        fullPage: true
-    });
-
-    console.log("Скриншот сохранён:", path);
-
-    await browser.close();
-})();
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running on " + PORT));
