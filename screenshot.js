@@ -1,5 +1,6 @@
 import express from "express";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 const app = express();
 app.use(express.json());
@@ -7,16 +8,12 @@ app.use(express.json());
 app.post("/screenshot", async (req, res) => {
     try {
         const url = req.body.url;
-
         if (!url) return res.status(400).send("No URL");
 
         const browser = await puppeteer.launch({
-            headless: "new",
-            args: [
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage"
-            ]
+            args: chromium.args,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
         });
 
         const page = await browser.newPage();
@@ -24,7 +21,7 @@ app.post("/screenshot", async (req, res) => {
         await page.setViewport({ width: 1280, height: 720 });
 
         await page.goto(url, {
-            waitUntil: "domcontentloaded",
+            waitUntil: "networkidle2",
             timeout: 0
         });
 
@@ -36,7 +33,6 @@ app.post("/screenshot", async (req, res) => {
         res.end(buffer);
 
     } catch (e) {
-        console.error(e);
         res.status(500).send(e.message);
     }
 });
